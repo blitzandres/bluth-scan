@@ -26,17 +26,17 @@ class BluetoothScanner:
     async def _scan_loop(self):
         while self._running:
             try:
-                devices = await BleakScanner.discover(timeout=5.0)
-                for d in devices:
-                    addr = d.address
+                # return_adv=True gives us (BLEDevice, AdvertisementData) per address
+                results = await BleakScanner.discover(timeout=5.0, return_adv=True)
+                for addr, (device, adv) in results.items():
                     if addr not in self.seen:
                         self.seen.add(addr)
-                        rssi = d.rssi if d.rssi else -100
+                        rssi = adv.rssi if adv.rssi is not None else -100
                         self.on_device_found({
-                            "id": addr,
-                            "name": d.name or "Unknown",
+                            "id":      addr,
+                            "name":    device.name or "Unknown",
                             "address": addr,
-                            "rssi": rssi,
+                            "rssi":    rssi,
                         })
             except Exception as e:
                 print(f"[Scanner] Error: {e}")

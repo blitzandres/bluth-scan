@@ -1,20 +1,17 @@
-import eventlet
-eventlet.monkey_patch()
-
-from flask import Flask, render_template_string
-from flask_socketio import SocketIO, emit
+from flask import Flask
+from flask_socketio import SocketIO
 from scanner import BluetoothScanner
 
 app = Flask(__name__, static_folder="static")
 app.config["SECRET_KEY"] = "bluth-scan-secret"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 scanner = None
 
 
 def device_found(device):
     print(f"[+] Found: {device['name']} | {device['address']} | RSSI: {device['rssi']}")
-    socketio.emit("device", device, namespace="/")
+    socketio.emit("device", device)
 
 
 @app.route("/")
