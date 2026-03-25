@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BluthScan — Neural BT Map</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #020409;
+      color: #e0f0ff;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    #graph { width: 100vw; height: 100vh; }
+
+    /* HUD overlay */
+    #hud {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #header {
+      position: absolute;
+      top: 20px; left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+    }
+
+    #header h1 {
+      font-size: 1.4rem;
+      letter-spacing: 0.4em;
+      color: #00d4ff;
+      text-shadow: 0 0 20px #00d4ff88, 0 0 40px #00d4ff44;
+    }
+
+    #header .sub {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: #0088aa;
+      margin-top: 4px;
+    }
+
+    /* Scan pulse ring */
+    #scan-ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      border: 2px solid #00d4ff44;
+      animation: pulse-ring 3s ease-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse-ring {
+      0%   { width: 60px; height: 60px; opacity: 0.8; border-color: #00d4ff88; }
+      100% { width: 500px; height: 500px; opacity: 0; border-color: #00d4ff00; }
+    }
+
+    /* Stats panel */
+    #stats {
+      position: absolute;
+      bottom: 24px; left: 24px;
+      background: rgba(0, 10, 20, 0.7);
+      border: 1px solid #00d4ff33;
+      border-radius: 8px;
+      padding: 14px 18px;
+      min-width: 220px;
+      backdrop-filter: blur(8px);
+    }
+
+    #stats .stat-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: #0088aa;
+      margin-bottom: 2px;
+    }
+
+    #stats .stat-value {
+      font-size: 1.1rem;
+      color: #00d4ff;
+      text-shadow: 0 0 10px #00d4ff66;
+    }
+
+    #stats .stat-row {
+      margin-bottom: 10px;
+    }
+
+    #device-count { color: #00ff88; text-shadow: 0 0 10px #00ff8866; }
+    #scan-status  { color: #00d4ff; }
+
+    /* Tooltip */
+    #tooltip {
+      position: absolute;
+      background: rgba(0, 10, 25, 0.92);
+      border: 1px solid #00d4ff55;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      backdrop-filter: blur(12px);
+      max-width: 240px;
+    }
+
+    #tooltip.visible { opacity: 1; }
+
+    #tooltip .tt-name {
+      color: #00d4ff;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      text-shadow: 0 0 8px #00d4ff88;
+    }
+
+    #tooltip .tt-addr { color: #aaa; font-size: 0.68rem; }
+    #tooltip .tt-rssi { margin-top: 6px; }
+
+    .rssi-bar {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 2px;
+      margin-right: 2px;
+    }
+
+    /* Log panel */
+    #log-panel {
+      position: absolute;
+      bottom: 24px; right: 24px;
+      background: rgba(0, 10, 20, 0.7);
+      border: 1px solid #00d4ff22;
+      border-radius: 8px;
+      padding: 12px 16px;
+      width: 280px;
+      max-height: 200px;
+      overflow-y: auto;
+      backdrop-filter: blur(8px);
+    }
+
+    #log-panel::-webkit-scrollbar { width: 3px; }
+    #log-panel::-webkit-scrollbar-thumb { background: #00d4ff33; }
+
+    .log-entry {
+      font-size: 0.65rem;
+      color: #005577;
+      padding: 2px 0;
+      border-bottom: 1px solid #00d4ff11;
+    }
+
+    .log-entry.new { color: #00d4ff; animation: fade-dim 4s forwards; }
+    .log-entry .log-time { color: #003344; margin-right: 6px; }
+
+    @keyframes fade-dim {
+      0%   { color: #00d4ff; }
+      30%  { color: #00aacc; }
+      100% { color: #005577; }
+    }
+
+    /* Corner decoration */
+    .corner {
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: #00d4ff33;
+      border-style: solid;
+    }
+    .corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
+    .corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+    .corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
+    .corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+  </style>
+</head>
+<body>
+
+<div id="graph"></div>
+
+<div id="hud">
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div id="scan-ring"></div>
+
+  <div id="header">
+    <h1>B L U T H S C A N</h1>
+    <div class="sub">NEURAL BLUETOOTH TOPOLOGY ENGINE</div>
+  </div>
+
+  <div id="stats">
+    <div class="stat-row">
+      <div class="stat-label">DEVICES DETECTED</div>
+      <div class="stat-value" id="device-count">0</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">ENGINE STATUS</div>
+      <div class="stat-value" id="scan-status">CONNECTING...</div>
+    </div>
+  </div>
+
+  <div id="log-panel"></div>
+
+  <div id="tooltip">
+    <div class="tt-name" id="tt-name"></div>
+    <div class="tt-addr" id="tt-addr"></div>
+    <div class="tt-rssi" id="tt-rssi"></div>
+  </div>
+</div>
+
+<!-- Dependencies -->
+<script src="https://unpkg.com/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+  // ─── Graph Data ───────────────────────────────────────────────────
+  const graphData = {
+    nodes: [{ id: "SCANNER", name: "BluthScan", address: "LOCAL", rssi: 0, isHub: true }],
+    links: []
+  };
+
+  let deviceCount = 0;
+  const tooltip = document.getElementById("tooltip");
+
+  // ─── RSSI → color ─────────────────────────────────────────────────
+  function rssiToColor(rssi) {
+    if (rssi >= -50) return "#00ff88";   // strong — green
+    if (rssi >= -70) return "#00d4ff";   // medium — cyan
+    if (rssi >= -85) return "#ff9900";   // weak   — orange
+    return "#ff3366";                     // very weak — red
+  }
+
+  function rssiLabel(rssi) {
+    if (rssi === 0) return "";
+    const color = rssiToColor(rssi);
+    const bars = rssi >= -50 ? 5 : rssi >= -65 ? 4 : rssi >= -75 ? 3 : rssi >= -85 ? 2 : 1;
+    let html = `<span style="color:#555">RSSI ${rssi} dBm &nbsp;</span>`;
+    for (let i = 0; i < 5; i++) {
+      html += `<span class="rssi-bar" style="background:${i < bars ? color : '#111'}"></span>`;
+    }
+    return html;
+  }
+
+  // ─── 3D Force Graph ───────────────────────────────────────────────
+  const Graph = ForceGraph3D({ antialias: true, alpha: true })(document.getElementById("graph"))
+    .backgroundColor("#020409")
+    .showNavInfo(false)
+    .nodeLabel(() => "")
+    .nodeVal(n => n.isHub ? 120 : 30)
+    .nodeColor(n => n.isHub ? "#00d4ff" : rssiToColor(n.rssi || -90))
+    .nodeResolution(16)
+    .nodeOpacity(0.95)
+    .linkColor(() => "#00d4ff22")
+    .linkWidth(0.6)
+    .linkOpacity(0.4)
+    .linkDirectionalParticles(2)
+    .linkDirectionalParticleWidth(1.2)
+    .linkDirectionalParticleColor(() => "#00d4ff")
+    .linkDirectionalParticleSpeed(0.006)
+    .graphData(graphData)
+    .onNodeHover((node, prevNode) => {
+      if (node) {
+        document.getElementById("tt-name").textContent = node.name || "Unknown";
+        document.getElementById("tt-addr").textContent = node.address || "";
+        document.getElementById("tt-rssi").innerHTML = rssiLabel(node.rssi);
+        tooltip.classList.add("visible");
+      } else {
+        tooltip.classList.remove("visible");
+      }
+    })
+    .onNodeClick(node => {
+      // Fly to clicked node
+      const dist = 80;
+      const distRatio = 1 + dist / Math.hypot(node.x, node.y, node.z);
+      Graph.cameraPosition(
+        { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+        node,
+        1200
+      );
+    });
+
+  // Custom node: glowing sphere with THREE.js
+  Graph.nodeThreeObject(node => {
+    const group = new THREE.Group();
+
+    const color = node.isHub ? 0x00d4ff : parseInt(rssiToColor(node.rssi || -90).replace("#", ""), 16);
+    const size  = node.isHub ? 10 : 4;
+
+    // Core sphere
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(size, 16, 16),
+      new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.9 })
+    );
+    group.add(sphere);
+
+    // Glow ring
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(size * 1.4, size * 1.8, 32),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+
+    // Hub gets outer pulse ring
+    if (node.isHub) {
+      const outerRing = new THREE.Mesh(
+        new THREE.RingGeometry(18, 22, 64),
+        new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide })
+      );
+      outerRing.rotation.x = Math.PI / 4;
+      group.add(outerRing);
+    }
+
+    return group;
+  });
+
+  // Slow auto-rotation
+  let angle = 0;
+  setInterval(() => {
+    angle += 0.002;
+    Graph.cameraPosition({
+      x: 320 * Math.sin(angle),
+      z: 320 * Math.cos(angle)
+    });
+  }, 33);
+
+  // Track mouse for tooltip
+  document.addEventListener("mousemove", e => {
+    tooltip.style.left = (e.clientX + 16) + "px";
+    tooltip.style.top  = (e.clientY + 16) + "px";
+  });
+
+  // ─── Log ─────────────────────────────────────────────────────────
+  function addLog(msg, isNew = false) {
+    const panel = document.getElementById("log-panel");
+    const now = new Date().toTimeString().slice(0, 8);
+    const el = document.createElement("div");
+    el.className = "log-entry" + (isNew ? " new" : "");
+    el.innerHTML = `<span class="log-time">${now}</span>${msg}`;
+    panel.insertBefore(el, panel.firstChild);
+    while (panel.children.length > 30) panel.removeChild(panel.lastChild);
+  }
+
+  // ─── WebSocket ────────────────────────────────────────────────────
+  const socket = io();
+
+  socket.on("connect", () => {
+    document.getElementById("scan-status").textContent = "ACTIVE";
+    addLog("Engine online — scanning BT spectrum", true);
+  });
+
+  socket.on("disconnect", () => {
+    document.getElementById("scan-status").textContent = "OFFLINE";
+    addLog("Connection lost");
+  });
+
+  socket.on("device", device => {
+    // Add node
+    graphData.nodes.push({
+      id:      device.id,
+      name:    device.name,
+      address: device.address,
+      rssi:    device.rssi,
+      isHub:   false
+    });
+
+    // Link to hub
+    graphData.links.push({ source: "SCANNER", target: device.id });
+
+    deviceCount++;
+    document.getElementById("device-count").textContent = deviceCount;
+
+    addLog(`<span style="color:#00ff88">+</span> ${device.name} <span style="color:#003344">${device.address}</span>`, true);
+
+    // Hot-update graph
+    Graph.graphData({ ...graphData });
+  });
+
+  addLog("BluthScan initializing...");
+</script>
+</body>
+</html>
