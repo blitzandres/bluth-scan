@@ -1,5 +1,9 @@
 # BluthScan — Neural Bluetooth Topology Engine
 
+**Project page:** https://andresblitz.com/projects/bluth-scan/
+
+**Author:** [Andrés Blitz](https://andresblitz.com/) · [@andresblitz](https://x.com/andresblitz)
+
 Real-time Bluetooth scanner that visualizes discovered devices as a living 3D neural graph using [3d-force-graph](https://github.com/vasturiano/3d-force-graph).
 
 ## How it works
